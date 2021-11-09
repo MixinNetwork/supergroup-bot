@@ -1,12 +1,12 @@
 package config
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"time"
 
 	"github.com/shopspring/decimal"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -30,51 +30,51 @@ type Lottery struct {
 	ClientID  string          `json:"client_id"`
 }
 type config struct {
-	Lang      string `json:"lang"`
-	Port      int    `json:"port"`
-	Dev       string `json:"dev"`
-	Encrypted bool   `json:"encrypted"`
+	Lang      string `yaml:"lang"`
+	Port      int    `yaml:"port"`
+	Dev       string `yaml:"dev"`
+	Encrypted bool   `yaml:"encrypted"`
 	Database  struct {
-		User     string `json:"user"`
-		Password string `json:"password"`
-		Host     string `json:"host"`
-		Port     string `json:"port"`
-		Name     string `json:"name"`
-	} `json:"database"`
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
 
 	Monitor struct {
-		ClientID       string `json:"client_id"`
-		SessionID      string `json:"session_id"`
-		PrivateKey     string `json:"private_key"`
-		ConversationID string `json:"conversation_id"`
-	} `json:"monitor"`
+		ClientID       string `yaml:"client_id"`
+		SessionID      string `yaml:"session_id"`
+		PrivateKey     string `yaml:"private_key"`
+		ConversationID string `yaml:"conversation_id"`
+	} `yaml:"monitor"`
 
 	Lottery struct {
-		ClientID   string                     `json:"client_id"`
-		SessionID  string                     `json:"session_id"`
-		PrivateKey string                     `json:"private_key"`
-		PinToken   string                     `json:"pin_token"`
-		PIN        string                     `json:"pin"`
-		List       []Lottery                  `json:"list"`
-		Rate       map[string]decimal.Decimal `json:"rate"`
-	} `json:"lottery"`
+		ClientID   string                     `yaml:"client_id"`
+		SessionID  string                     `yaml:"session_id"`
+		PrivateKey string                     `yaml:"private_key"`
+		PinToken   string                     `yaml:"pin_token"`
+		PIN        string                     `yaml:"pin"`
+		List       []Lottery                  `yaml:"list"`
+		Rate       map[string]decimal.Decimal `yaml:"rate"`
+	} `yaml:"lottery"`
 
 	Qiniu struct {
-		AccessKey string `json:"access_key"`
-		SecretKey string `json:"secret_key"`
-		Bucket    string `json:"bucket"`
-		Region    string `json:"region"`
-	} `json:"qiniu,omitempty"`
+		AccessKey string `yaml:"access_key"`
+		SecretKey string `yaml:"secret_key"`
+		Bucket    string `yaml:"bucket"`
+		Region    string `yaml:"region"`
+	} `yaml:"qiniu,omitempty"`
 
-	RedisAddr string `json:"redis_addr"`
+	RedisAddr string `yaml:"redis_addr"`
 
-	ClientList     []string `json:"client_list"`
-	ShowClientList []string `json:"show_client_list"`
-	LuckCoinAppID  string   `json:"luck_coin_app_id"`
+	ClientList     []string `yaml:"client_list"`
+	ShowClientList []string `yaml:"show_client_list"`
+	LuckCoinAppID  string   `yaml:"luck_coin_app_id"`
 
-	FoxToken     string `json:"fox_token"`
-	ExinToken    string `json:"exin_token"`
-	ExinLocalKey string `json:"exin_local_key"`
+	FoxToken     string `yaml:"fox_token"`
+	ExinToken    string `yaml:"exin_token"`
+	ExinLocalKey string `yaml:"exin_local_key"`
 }
 
 type text struct {
@@ -139,12 +139,13 @@ var Config config
 var Text text
 
 func init() {
-	data, err := ioutil.ReadFile("config.json")
+	data, err := ioutil.ReadFile("config.yaml")
 	if err != nil {
 		log.Println("config.json open fail...", err)
 		return
 	}
-	err = json.Unmarshal(data, &Config)
+
+	err = yaml.Unmarshal(data, &Config)
 	if err != nil {
 		log.Println("config.json parse err...", err)
 	}

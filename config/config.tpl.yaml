@@ -1,0 +1,23 @@
+port: 7001
+lang: zh
+encrypted: false
+database:
+  user: postgres
+  password: postgres
+  port: 5432
+  name: super
+monitor:
+  client_id: ''
+  session_id: ''
+  private_key: ''
+  conversation_id: ''
+qiniu:
+  access_key: ''
+  secret_key: ''
+  bucket: ''
+redis_addr: ''
+client_list:
+  - ''
+show_client_list:
+  - ''
+luck_coin_app_id: ''

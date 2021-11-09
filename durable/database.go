@@ -47,19 +47,6 @@ func (d *Database) ConnExec(ctx context.Context, sql string, arguments ...interf
 	return err
 }
 
-func (d *Database) ConnQueryRow(ctx context.Context, sql string, fn func(row pgx.Row) error, args ...interface{}) error {
-	conn, err := d.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	err = fn(conn.QueryRow(ctx, sql, args...))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (d *Database) ConnQuery(ctx context.Context, sql string, fn func(rows pgx.Rows) error, args ...interface{}) error {
 	conn, err := d.Acquire(ctx)
 	if err != nil {

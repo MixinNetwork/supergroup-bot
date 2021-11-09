@@ -73,14 +73,11 @@ func LotteryStatistic(ctx context.Context) {
 
 func getYesterdayLotteryTimes(ctx context.Context) int {
 	var times int
-	if err := session.Database(ctx).ConnQueryRow(ctx, `
+	if err := session.Database(ctx).QueryRow(ctx, `
 SELECT COUNT(1) 
 FROM lottery_record 
 WHERE created_at between CURRENT_DATE-1 and CURRENT_DATE`,
-		func(rows pgx.Row) error {
-			return rows.Scan(&times)
-		},
-	); err != nil {
+	).Scan(&times); err != nil {
 		session.Logger(ctx).Println(err)
 	}
 	return times
