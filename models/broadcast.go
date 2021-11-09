@@ -9,7 +9,6 @@ import (
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/MixinNetwork/supergroup/tools"
 	"github.com/fox-one/mixin-sdk-go"
-	"github.com/jackc/pgx/v4"
 )
 
 const broadcast_DDL = `
@@ -40,7 +39,7 @@ var (
 
 func GetBroadcast(ctx context.Context, u *ClientUser) ([]*Message, error) {
 	broadcasts := make([]*Message, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT m.message_id, m.user_id, m.category, m.data, u.full_name, u.avatar_url, b.status, b.created_at, b.top_at
 FROM messages as m
 LEFT JOIN users as u ON m.user_id=u.user_id
@@ -49,18 +48,18 @@ WHERE m.message_id IN (
   SELECT message_id FROM broadcast WHERE m.client_id=$1
 )
 ORDER BY b.created_at DESC
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var b Message
-			if err := rows.Scan(&b.MessageID, &b.UserID, &b.Category, &b.Data, &b.FullName, &b.AvatarURL, &b.Status, &b.CreatedAt, &b.TopAt); err != nil {
-				return err
-			}
-			b.Data = string(tools.Base64Decode(b.Data))
-			broadcasts = append(broadcasts, &b)
-		}
-		return nil
-	}, u.ClientID); err != nil {
+`, u.ClientID)
+	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var b Message
+		if err := rows.Scan(&b.MessageID, &b.UserID, &b.Category, &b.Data, &b.FullName, &b.AvatarURL, &b.Status, &b.CreatedAt, &b.TopAt); err != nil {
+			return nil, err
+		}
+		b.Data = string(tools.Base64Decode(b.Data))
+		broadcasts = append(broadcasts, &b)
 	}
 	return broadcasts, nil
 }
@@ -124,23 +123,23 @@ SELECT status FROM broadcast WHERE client_id=$1 AND message_id=$2
 		return
 	}
 	// 获取消息列表
-	dms := make([]*DistributeMessage, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT user_id, message_id
 FROM distribute_messages 
 WHERE client_id=$1 AND origin_message_id=$2
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var dm DistributeMessage
-			if err := rows.Scan(&dm.UserID, &dm.MessageID); err != nil {
-				return err
-			}
-			dms = append(dms, &dm)
-		}
-		return nil
-	}, clientID, originMsgID); err != nil {
+`, clientID, originMsgID)
+	if err != nil {
 		session.Logger(ctx).Println(err)
 		return
+	}
+
+	var dms []*DistributeMessage
+	for rows.Next() {
+		var dm DistributeMessage
+		if err := rows.Scan(&dm.UserID, &dm.MessageID); err != nil {
+			return
+		}
+		dms = append(dms, &dm)
 	}
 	// 构建 recall 消息请求
 	msgs := make([]*mixin.MessageRequest, 0)

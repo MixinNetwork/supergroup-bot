@@ -2,25 +2,14 @@ package models
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/MixinNetwork/supergroup/durable"
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/jackc/pgx/v4"
-	"time"
 )
-
-const activity_DDL = `
-CREATE TABLE IF NOT EXISTS activity (
-    activity_index      SMALLINT NOT NULL PRIMARY KEY,
-    client_id           VARCHAR(36) NOT NULL,
-    status              SMALLINT DEFAULT 1, -- 1 不展示 2 展示
-    img_url             VARCHAR(512) DEFAULT '',
-    expire_img_url      VARCHAR(512) DEFAULT '',
-    action              VARCHAR(512) DEFAULT '',
-    start_at            TIMESTAMP WITH TIME ZONE NOT NULL,
-    expire_at           TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-`
 
 type Activity struct {
 	ActivityIndex int    `json:"activity_index,omitempty"`
@@ -35,21 +24,33 @@ type Activity struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 }
 
+var activitiesColumnsFull = []string{"activity_index", "client_id", "status", "img_url", "expire_img_url", "action", "start_at", "expire_at", "created_at"}
+
+func activityFromRow(row durable.Row) (*Activity, error) {
+	var a Activity
+	err := row.Scan(&a.ActivityIndex, &a.ImgURL, &a.ExpireImgURL, &a.Action, &a.StartAt, &a.ExpireAt, &a.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	return &a, err
+}
+
 func GetActivityByClientID(ctx context.Context, clientID string) ([]*Activity, error) {
-	as := make([]*Activity, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
-SELECT activity_index,img_url,expire_img_url,action,start_at,expire_at,created_at FROM activity WHERE client_id=$1 AND status=2 ORDER BY activity_index
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var a Activity
-			if err := rows.Scan(&a.ActivityIndex, &a.ImgURL, &a.ExpireImgURL, &a.Action, &a.StartAt, &a.ExpireAt, &a.CreatedAt); err != nil {
-				session.Logger(ctx).Println(err)
-			}
-			as = append(as, &a)
+	query := fmt.Sprintf("SELECT %s FROM activity WHERE client_id=$1 AND status=2", strings.Join(activitiesColumnsFull, ","))
+	rows, err := session.Database(ctx).Query(ctx, query, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	var as []*Activity
+	for rows.Next() {
+		a, err := activityFromRow(rows)
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	}, clientID)
-	return as, err
+		as = append(as, a)
+	}
+	return nil, err
 }
 
 func UpdateActivity(ctx context.Context, a *Activity) error {

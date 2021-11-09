@@ -4,78 +4,54 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"log"
 	"strings"
 
 	"github.com/MixinNetwork/supergroup/config"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type Database struct {
-	*pgxpool.Pool
+	pool *pgxpool.Pool
 }
 
 func NewDatabase(ctx context.Context) *Database {
-	connStr := ""
-	if config.Config.Database.Port == "" {
-		connStr = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", config.Config.Database.User, config.Config.Database.Password, config.Config.Database.Host, config.Config.Database.Name)
-	} else {
-		connStr = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", config.Config.Database.User, config.Config.Database.Password, config.Config.Database.Host, config.Config.Database.Port, config.Config.Database.Name)
-	}
-	pool, err := pgxpool.Connect(ctx, connStr)
+	db := config.Config.Database
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", db.User, db.Password, db.Host, db.Port, db.Name)
+	config, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		log.Panicln(err)
 	}
-	return &Database{pool}
+	config.MinConns = 6
+	config.MaxConns = 256
+
+	pool, err := pgxpool.ConnectConfig(context.Background(), config)
+	if err != nil {
+		log.Panicln(err)
+	}
+	err = pool.Ping(ctx)
+	if err != nil {
+		log.Panicln(err)
+	}
+	return &Database{pool: pool}
 }
 
-func (d *Database) ConnExec(ctx context.Context, sql string, arguments ...interface{}) error {
-	conn, err := d.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	_, err = conn.Exec(ctx, sql, arguments...)
-	return err
+func (d *Database) Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error) {
+	return d.pool.Exec(ctx, sql, arguments...)
 }
 
-func (d *Database) ConnQueryRow(ctx context.Context, sql string, fn func(row pgx.Row) error, args ...interface{}) error {
-	conn, err := d.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	err = fn(conn.QueryRow(ctx, sql, args...))
-	if err != nil {
-		return err
-	}
-	return nil
+func (d *Database) QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row {
+	return d.pool.QueryRow(ctx, sql, args)
 }
 
-func (d *Database) ConnQuery(ctx context.Context, sql string, fn func(rows pgx.Rows) error, args ...interface{}) error {
-	conn, err := d.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	rows, err := conn.Query(ctx, sql, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	err = fn(rows)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (d *Database) Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error) {
+	return d.pool.Query(ctx, sql, args)
 }
 
 func (d *Database) RunInTransaction(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
-	tx, err := d.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return err
 	}

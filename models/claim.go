@@ -183,20 +183,19 @@ func GetPowerRecordList(ctx context.Context, u *ClientUser, page int) ([]PowerRe
 	if page < 1 {
 		page = 1
 	}
-	var list []PowerRecord
-	if err := session.Database(ctx).ConnQuery(ctx,
+	rows, err := session.Database(ctx).Query(ctx,
 		"SELECT power_type, amount, to_char(created_at, 'YYYY-MM-DD') AS created_at FROM power_record WHERE user_id = $1 ORDER BY created_at DESC OFFSET $2 LIMIT 20",
-		func(rows pgx.Rows) error {
-			for rows.Next() {
-				var r PowerRecord
-				if err := rows.Scan(&r.PowerType, &r.Amount, &r.Date); err != nil {
-					return err
-				}
-				list = append(list, r)
-			}
-			return nil
-		}, u.UserID, (page-1)*20); err != nil {
+		u.UserID, (page-1)*20)
+	if err != nil {
 		return nil, err
+	}
+	var list []PowerRecord
+	for rows.Next() {
+		var r PowerRecord
+		if err := rows.Scan(&r.PowerType, &r.Amount, &r.Date); err != nil {
+			return nil, err
+		}
+		list = append(list, r)
 	}
 	return list, nil
 }

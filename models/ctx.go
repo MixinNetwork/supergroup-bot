@@ -16,7 +16,6 @@ func init() {
 }
 
 var initModal = []string{
-	activity_DDL,
 	airdrop_DDL,
 	login_log_DDL,
 	client_member_auth_DDL,

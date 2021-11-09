@@ -6,7 +6,6 @@ import (
 
 	"github.com/MixinNetwork/supergroup/durable"
 	"github.com/MixinNetwork/supergroup/session"
-	"github.com/jackc/pgx/v4"
 	"github.com/shopspring/decimal"
 )
 
@@ -38,24 +37,18 @@ func UpdateClientAssetLPCheck(ctx context.Context, clientID, assetID string) err
 }
 
 func GetClientAssetLPCheckMapByID(ctx context.Context, clientID string) (map[string]decimal.Decimal, error) {
-	result := make(map[string]decimal.Decimal)
-	err := session.Database(ctx).ConnQuery(ctx, `
-SELECT calc.client_id,calc.asset_id,a.price_usd
-FROM client_asset_lp_check AS calc
-LEFT JOIN assets AS a ON calc.asset_id=a.asset_id
-WHERE calc.client_id=$1
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var ca ClientAssetLpCheck
-			if err := rows.Scan(&ca.ClientID, &ca.AssetID, &ca.PriceUsd); err != nil {
-				return err
-			}
-			result[ca.AssetID] = ca.PriceUsd
-		}
-		return nil
-	}, clientID)
+	rows, err := session.Database(ctx).Query(ctx, ` SELECT calc.client_id,calc.asset_id,a.price_usd FROM client_asset_lp_check AS calc LEFT JOIN assets AS a ON calc.asset_id=a.asset_id WHERE calc.client_id=$1 `, clientID)
 	if err != nil {
 		return nil, err
+	}
+
+	result := make(map[string]decimal.Decimal)
+	for rows.Next() {
+		var ca ClientAssetLpCheck
+		if err := rows.Scan(&ca.ClientID, &ca.AssetID, &ca.PriceUsd); err != nil {
+			return nil, err
+		}
+		result[ca.AssetID] = ca.PriceUsd
 	}
 	return result, nil
 }

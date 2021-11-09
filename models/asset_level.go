@@ -220,19 +220,18 @@ func GetAllUserExinShares(ctx context.Context, userIDs []string) (durable.UserSh
 }
 
 func getAllCheckAssetID(ctx context.Context) ([]string, error) {
-	assetIDs := make([]string, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
-SELECT distinct(c.asset_id) FROM client as c
-LEFT JOIN assets AS a ON c.asset_id=a.asset_id
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var assetID string
-			if err := rows.Scan(&assetID); err != nil {
-				return err
-			}
-			assetIDs = append(assetIDs, assetID)
+	rows, err := session.Database(ctx).Query(ctx, `SELECT distinct(c.asset_id) FROM client as c LEFT JOIN assets AS a ON c.asset_id=a.asset_id`)
+	if err != nil {
+		return nil, err
+	}
+
+	var assetIDs []string
+	for rows.Next() {
+		var assetID string
+		if err := rows.Scan(&assetID); err != nil {
+			return nil, err
 		}
-		return nil
-	})
+		assetIDs = append(assetIDs, assetID)
+	}
 	return assetIDs, err
 }

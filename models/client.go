@@ -125,21 +125,21 @@ WHERE client.client_id=$1`,
 }
 
 func GetClientList(ctx context.Context) ([]*Client, error) {
-	clientList := make([]*Client, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT client_id, session_id,pin_token,private_key,pin,speak_status,asset_id,created_at
 FROM client
-WHERE client_id=ANY($1)
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var c Client
-			if err := rows.Scan(&c.ClientID, &c.SessionID, &c.PinToken, &c.PrivateKey, &c.Pin, &c.SpeakStatus, &c.AssetID, &c.CreatedAt); err != nil {
-				return err
-			}
-			clientList = append(clientList, &c)
+WHERE client_id=ANY($1)`, config.Config.ClientList)
+	if err != nil {
+		return nil, err
+	}
+	var clientList []*Client
+	for rows.Next() {
+		var c Client
+		if err := rows.Scan(&c.ClientID, &c.SessionID, &c.PinToken, &c.PrivateKey, &c.Pin, &c.SpeakStatus, &c.AssetID, &c.CreatedAt); err != nil {
+			return nil, err
 		}
-		return nil
-	}, config.Config.ClientList)
+		clientList = append(clientList, &c)
+	}
 	return clientList, err
 }
 
@@ -310,41 +310,40 @@ func GetClientInfoByHostOrID(ctx context.Context, host, id string) (*ClientInfo,
 }
 
 func GetAllClientInfo(ctx context.Context) ([]ClientInfo, error) {
-	cis := make([]ClientInfo, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
-SELECT client_id FROM client WHERE client_id=ANY($1)
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var clientID string
-			if err := rows.Scan(&clientID); err != nil {
-				return err
-			}
-			if ci, err := GetClientInfoByHostOrID(ctx, "", clientID); err != nil {
-				return err
-			} else {
-				cis = append(cis, *ci)
-			}
-		}
-		return nil
-	}, config.Config.ShowClientList); err != nil {
+	rows, err := session.Database(ctx).Query(ctx, ` SELECT client_id FROM client WHERE client_id=ANY($1) `, config.Config.ShowClientList)
+
+	if err != nil {
 		return nil, err
+	}
+
+	cis := make([]ClientInfo, 0)
+	for rows.Next() {
+		var clientID string
+		if err := rows.Scan(&clientID); err != nil {
+			return nil, err
+		}
+		if ci, err := GetClientInfoByHostOrID(ctx, "", clientID); err != nil {
+			return nil, err
+		} else {
+			cis = append(cis, *ci)
+		}
 	}
 	return cis, nil
 }
 
 func getAllClient(ctx context.Context) ([]string, error) {
-	cs := make([]string, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
-SELECT client_id FROM client
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var c string
-			if err := rows.Scan(&c); err != nil {
-				return err
-			}
-			cs = append(cs, c)
+	rows, err := session.Database(ctx).Query(ctx, ` SELECT client_id FROM client limit 1000 `)
+	if err != nil {
+		return nil, err
+	}
+
+	var cs []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
 		}
-		return nil
-	})
+		cs = append(cs, c)
+	}
 	return cs, err
 }

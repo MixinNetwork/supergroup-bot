@@ -7,7 +7,6 @@ import (
 
 	"github.com/MixinNetwork/supergroup/durable"
 	"github.com/MixinNetwork/supergroup/session"
-	"github.com/jackc/pgx/v4"
 	"github.com/shopspring/decimal"
 )
 
@@ -45,29 +44,28 @@ var cacheBlockClientUserIDMap = make(map[string]map[string]bool)
 func checkIsBlockUser(ctx context.Context, clientID, userID string) bool {
 	if cacheBlockClientUserIDMap[clientID] == nil {
 		blockUsers := make(map[string]bool)
-		if err := session.Database(ctx).ConnQuery(ctx, `SELECT user_id FROM block_user`, func(rows pgx.Rows) error {
-			for rows.Next() {
-				var u string
-				if err := rows.Scan(&u); err != nil {
-					return err
-				}
-				blockUsers[u] = true
-			}
-			return nil
-		}); err != nil {
+		rows, err := session.Database(ctx).Query(ctx, `SELECT user_id FROM block_user`)
+		if err != nil {
 			return false
 		}
-		if err := session.Database(ctx).ConnQuery(ctx, `SELECT user_id FROM client_block_user WHERE client_id=$1`, func(rows pgx.Rows) error {
-			for rows.Next() {
-				var u string
-				if err := rows.Scan(&u); err != nil {
-					return err
-				}
-				blockUsers[u] = true
+
+		for rows.Next() {
+			var u string
+			if err := rows.Scan(&u); err != nil {
+				return false
 			}
-			return nil
-		}, clientID); err != nil {
+			blockUsers[u] = true
+		}
+		rows, err = session.Database(ctx).Query(ctx, `SELECT user_id FROM client_block_user WHERE client_id=$1`, clientID)
+		if err != nil {
 			return false
+		}
+		for rows.Next() {
+			var u string
+			if err := rows.Scan(&u); err != nil {
+				return false
+			}
+			blockUsers[u] = true
 		}
 		cacheBlockClientUserIDMap[clientID] = blockUsers
 	}
@@ -102,22 +100,21 @@ func blockClientUser(ctx context.Context, clientID, userID string, isCancel bool
 // 撤回用户最近 1 小时的消息
 func recallLatestMsg(clientID, uid string) {
 	// 1. 找到该用户最近发的消息列表的ID
-	msgIDList := make([]string, 0)
-	err := session.Database(_ctx).ConnQuery(_ctx, `
+	rows, err := session.Database(_ctx).Query(_ctx, `
 SELECT message_id FROM messages WHERE user_id=$1 AND status=$2 AND category=ANY($3) AND now()-created_at<interval '1 hours'
-`, func(rows pgx.Rows) error {
-		var msgID string
-		for rows.Next() {
-			if err := rows.Scan(&msgID); err != nil {
-				return err
-			}
-			msgIDList = append(msgIDList, msgID)
-		}
-		return nil
-	}, uid, MessageStatusFinished, recallMsgCategorySupportList)
+`, uid, MessageStatusFinished, recallMsgCategorySupportList)
 	if err != nil {
 		session.Logger(_ctx).Println(err)
 		return
+	}
+
+	var msgIDList []string
+	for rows.Next() {
+		var msgID string
+		if err := rows.Scan(&msgID); err != nil {
+			continue
+		}
+		msgIDList = append(msgIDList, msgID)
 	}
 	for _, msgID := range msgIDList {
 		if err := CreatedManagerRecallMsg(_ctx, clientID, msgID, uid); err != nil {
