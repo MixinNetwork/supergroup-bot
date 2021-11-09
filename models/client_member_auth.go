@@ -7,7 +7,6 @@ import (
 
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/fox-one/mixin-sdk-go"
-	"github.com/jackc/pgx/v4"
 )
 
 const client_member_auth_DDL = `
@@ -71,25 +70,25 @@ func GetClientMemberAuth(ctx context.Context, u *ClientUser) (map[int]ClientMemb
 		return nil, session.ForbiddenError(ctx)
 	}
 	cmas := make(map[int]ClientMemberAuth)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT client_id,user_status,plain_text,plain_sticker,lucky_coin,plain_image,plain_video,app_card,
 plain_post,plain_data,plain_live,plain_contact,plain_transcript,url,updated_at
 FROM client_member_auth
 WHERE client_id=$1
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var cma ClientMemberAuth
-			if err := rows.Scan(&cma.ClientID, &cma.UserStatus, &cma.PlainText, &cma.PlainSticker,
-				&cma.LuckyCoin, &cma.PlainImage, &cma.PlainVideo, &cma.AppCard, &cma.PlainPost, &cma.PlainData,
-				&cma.PlainLive, &cma.PlainContact, &cma.PlainTranscript, &cma.URL, &cma.UpdatedAt); err != nil {
-				return err
-			}
-			cma.Limit = statusLimitMap[cma.UserStatus]
-			cmas[cma.UserStatus] = cma
-		}
-		return nil
-	}, u.ClientID); err != nil {
+`, u.ClientID)
+	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var cma ClientMemberAuth
+		if err := rows.Scan(&cma.ClientID, &cma.UserStatus, &cma.PlainText, &cma.PlainSticker,
+			&cma.LuckyCoin, &cma.PlainImage, &cma.PlainVideo, &cma.AppCard, &cma.PlainPost, &cma.PlainData,
+			&cma.PlainLive, &cma.PlainContact, &cma.PlainTranscript, &cma.URL, &cma.UpdatedAt); err != nil {
+			return nil, err
+		}
+		cma.Limit = statusLimitMap[cma.UserStatus]
+		cmas[cma.UserStatus] = cma
 	}
 	return cmas, nil
 }

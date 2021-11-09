@@ -168,18 +168,17 @@ WHERE client_id=$1 AND priority=ANY($2) %s AND status!=$3
 ORDER BY created_at
 `, addQuery)
 
-	err := session.Database(ctx).ConnQuery(ctx, query, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var b string
-			if err := rows.Scan(&b); err != nil {
-				return err
-			}
-			userList = append(userList, b)
-		}
-		return nil
-	}, clientID, priority, ClientUserStatusExit)
+	rows, err := session.Database(ctx).Query(ctx, query, clientID, priority, ClientUserStatusExit)
 	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var b string
+		if err := rows.Scan(&b); err != nil {
+			return nil, err
+		}
+		userList = append(userList, b)
 	}
 	return userList, nil
 }
@@ -196,16 +195,17 @@ AND cu.status IN (1,2,3,4,5)
 	if !hasPayedUser {
 		query += `AND cu.pay_expired_at<NOW()`
 	}
-	err := session.Database(ctx).ConnQuery(ctx, query, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var cu ClientUser
-			if err := rows.Scan(&cu.ClientID, &cu.UserID, &cu.AccessToken, &cu.Priority, &cu.Status, &cu.AssetID, &cu.SpeakStatus, &cu.DeliverAt); err != nil {
-				return err
-			}
-			allUser = append(allUser, &cu)
+	rows, err := session.Database(ctx).Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var cu ClientUser
+		if err := rows.Scan(&cu.ClientID, &cu.UserID, &cu.AccessToken, &cu.Priority, &cu.Status, &cu.AssetID, &cu.SpeakStatus, &cu.DeliverAt); err != nil {
+			return nil, err
 		}
-		return nil
-	})
+		allUser = append(allUser, &cu)
+	}
 	return allUser, err
 }
 
@@ -341,18 +341,20 @@ func getClientManager(ctx context.Context, clientID string) ([]string, error) {
 
 func getClientUserByClientIDAndStatus(ctx context.Context, clientID string, status int) ([]string, error) {
 	users := make([]string, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT user_id FROM client_users WHERE client_id=$1 AND status=$2
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var user string
-			if err := rows.Scan(&user); err != nil {
-				return err
-			}
-			users = append(users, user)
+`, clientID, status)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var user string
+		if err := rows.Scan(&user); err != nil {
+			return nil, err
 		}
-		return nil
-	}, clientID, status)
+		users = append(users, user)
+	}
 	return users, err
 }
 
@@ -394,20 +396,22 @@ func activeUser(u *ClientUser) {
 
 func GetPendingClientUser(ctx context.Context) ([]*ClientUser, error) {
 	cus := make([]*ClientUser, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT client_id,user_id,access_token
 FROM client_users
 WHERE priority=$1
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var cu ClientUser
-			if err := rows.Scan(&cu.ClientID, &cu.UserID, &cu.AccessToken); err != nil {
-				return err
-			}
-			cus = append(cus, &cu)
+`, ClientUserPriorityPending)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var cu ClientUser
+		if err := rows.Scan(&cu.ClientID, &cu.UserID, &cu.AccessToken); err != nil {
+			return nil, err
 		}
-		return nil
-	}, ClientUserPriorityPending)
+		cus = append(cus, &cu)
+	}
 	return cus, err
 }
 
@@ -458,22 +462,24 @@ AND muted_at>NOW()
 
 func getClientBlockUserView(ctx context.Context, clientID string) ([]*clientUserView, error) {
 	cus := make([]*clientUserView, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT cbu.user_id,avatar_url,full_name,identity_number,cu.status,deliver_at,cu.created_at
 FROM client_block_user cbu
 LEFT JOIN client_users cu ON cbu.user_id=cu.user_id AND cbu.client_id=cu.client_id
 LEFT JOIN users u ON cu.user_id=u.user_id
 WHERE cbu.client_id=$1
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var u clientUserView
-			if err := rows.Scan(&u.UserID, &u.AvatarURL, &u.FullName, &u.IdentityNumber, &u.Status, &u.ActiveAt, &u.CreatedAt); err != nil {
-				return err
-			}
-			cus = append(cus, &u)
+`, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var u clientUserView
+		if err := rows.Scan(&u.UserID, &u.AvatarURL, &u.FullName, &u.IdentityNumber, &u.Status, &u.ActiveAt, &u.CreatedAt); err != nil {
+			return nil, err
 		}
-		return nil
-	}, clientID)
+		cus = append(cus, &u)
+	}
 	return cus, err
 }
 
@@ -577,16 +583,18 @@ LIMIT 20
 
 func getClientUserView(ctx context.Context, query string, p ...interface{}) ([]*clientUserView, error) {
 	cs := make([]*clientUserView, 0)
-	err := session.Database(ctx).ConnQuery(ctx, query, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var u clientUserView
-			if err := rows.Scan(&u.UserID, &u.AvatarURL, &u.FullName, &u.IdentityNumber, &u.Status, &u.ActiveAt, &u.CreatedAt); err != nil {
-				return err
-			}
-			cs = append(cs, &u)
+	rows, err := session.Database(ctx).Query(ctx, query, p...)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var u clientUserView
+		if err := rows.Scan(&u.UserID, &u.AvatarURL, &u.FullName, &u.IdentityNumber, &u.Status, &u.ActiveAt, &u.CreatedAt); err != nil {
+			return nil, err
 		}
-		return nil
-	}, p...)
+		cs = append(cs, &u)
+	}
 	return cs, err
 }
 

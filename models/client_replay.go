@@ -13,7 +13,6 @@ import (
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/MixinNetwork/supergroup/tools"
 	"github.com/fox-one/mixin-sdk-go"
-	"github.com/jackc/pgx/v4"
 )
 
 const client_replay_DDL = `
@@ -543,7 +542,7 @@ func SendRecallMsg(clientID string, msg *mixin.MessageView) {
 
 func sendPendingMsgByCount(ctx context.Context, clientID, userID string, count int) {
 	msgs := make([]*Message, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT user_id,message_id,category,data
 FROM messages
 WHERE client_id=$1
@@ -551,18 +550,18 @@ AND status IN (4,6)
 AND category!='MESSAGE_RECALL'
 AND created_at > CURRENT_DATE-1
 ORDER BY created_at DESC
-LIMIT $2`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var msg Message
-			if err := rows.Scan(&msg.UserID, &msg.MessageID, &msg.Category, &msg.Data); err != nil {
-				return err
-			}
-			msgs = append(msgs, &msg)
-		}
-		return nil
-	}, clientID, count); err != nil {
+LIMIT $2`, clientID, count)
+	if err != nil {
 		session.Logger(ctx).Println(err)
 		return
+	}
+
+	for rows.Next() {
+		var msg Message
+		if err := rows.Scan(&msg.UserID, &msg.MessageID, &msg.Category, &msg.Data); err != nil {
+			return
+		}
+		msgs = append(msgs, &msg)
 	}
 	lastCreatedAt, err := distributeMsg(ctx, msgs, clientID, userID)
 	if err != nil {
@@ -598,24 +597,24 @@ func sendPendingLiveMsg(ctx context.Context, clientID, userID string, startTime 
 
 func sendLeftMsg(ctx context.Context, clientID, userID string, leftTime time.Time) (time.Time, error) {
 	msgs := make([]*Message, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT user_id,message_id,category,data
 FROM messages
 WHERE client_id=$1
 AND created_at>$2
 AND status IN (4,6)
 AND category!='MESSAGE_RECALL'
-ORDER BY created_at DESC`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var msg Message
-			if err := rows.Scan(&msg.UserID, &msg.MessageID, &msg.Category, &msg.Data); err != nil {
-				return err
-			}
-			msgs = append(msgs, &msg)
-		}
-		return nil
-	}, clientID, leftTime); err != nil {
+ORDER BY created_at DESC`, clientID, leftTime)
+	if err != nil {
 		return time.Time{}, err
+	}
+
+	for rows.Next() {
+		var msg Message
+		if err := rows.Scan(&msg.UserID, &msg.MessageID, &msg.Category, &msg.Data); err != nil {
+			return time.Time{}, err
+		}
+		msgs = append(msgs, &msg)
 	}
 	return distributeMsg(ctx, msgs, clientID, userID)
 }
@@ -668,23 +667,22 @@ func distributeMsg(ctx context.Context, msgList []*Message, clientID, userID str
 func getLeftDistributeMsgAndDistribute(ctx context.Context, clientID, userID string) (time.Time, error) {
 	msgs := make([]*mixin.MessageRequest, 0)
 	var originMsgID string
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT conversation_id,user_id,message_id,category,data,representative_id,quote_message_id,origin_message_id
 FROM distribute_messages
 WHERE client_id=$1 AND user_id=$2 AND status=$3
 ORDER BY created_at
-`,
-		func(rows pgx.Rows) error {
-			for rows.Next() {
-				var dm mixin.MessageRequest
-				if err := rows.Scan(&dm.ConversationID, &dm.RecipientID, &dm.MessageID, &dm.Category, &dm.Data, &dm.RepresentativeID, &dm.QuoteMessageID, &originMsgID); err != nil {
-					return err
-				}
-				msgs = append(msgs, &dm)
-			}
-			return nil
-		}, clientID, userID, DistributeMessageStatusAloneList); err != nil {
+`, clientID, userID, DistributeMessageStatusAloneList)
+	if err != nil {
 		return time.Time{}, err
+	}
+
+	for rows.Next() {
+		var dm mixin.MessageRequest
+		if err := rows.Scan(&dm.ConversationID, &dm.RecipientID, &dm.MessageID, &dm.Category, &dm.Data, &dm.RepresentativeID, &dm.QuoteMessageID, &originMsgID); err != nil {
+			return time.Time{}, err
+		}
+		msgs = append(msgs, &dm)
 	}
 	if len(msgs) == 0 {
 		return time.Time{}, nil
