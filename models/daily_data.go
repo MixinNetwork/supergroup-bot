@@ -8,7 +8,6 @@ import (
 	"github.com/MixinNetwork/supergroup/config"
 	"github.com/MixinNetwork/supergroup/durable"
 	"github.com/MixinNetwork/supergroup/session"
-	"github.com/jackc/pgx/v4"
 	"github.com/robfig/cron/v3"
 )
 
@@ -135,22 +134,17 @@ func GetDailyDataByClientID(ctx context.Context, u *ClientUser) (*DailyDataResp,
 		Today:    nil,
 		HighUser: 0,
 	}
-	if err := session.Database(ctx).ConnQuery(ctx, `
-SELECT to_char(date, 'YYYY-MM-DD') date, users, messages, active_users
-FROM daily_data
-WHERE client_id=$1
-ORDER BY date
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var d DailyData
-			if err := rows.Scan(&d.Date, &d.Users, &d.Messages, &d.ActiveUsers); err != nil {
-				return err
-			}
-			res.List = append(res.List, &d)
-		}
-		return nil
-	}, u.ClientID); err != nil {
+	rows, err := session.Database(ctx).Query(ctx, ` SELECT to_char(date, 'YYYY-MM-DD') date, users, messages, active_users FROM daily_data WHERE client_id=$1 ORDER BY date `, u.ClientID)
+	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var d DailyData
+		if err := rows.Scan(&d.Date, &d.Users, &d.Messages, &d.ActiveUsers); err != nil {
+			return nil, err
+		}
+		res.List = append(res.List, &d)
 	}
 	var d DailyData
 	startAt, _ := time.Parse("2006-1-2", time.Now().Format("2006-1-2"))

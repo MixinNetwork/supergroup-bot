@@ -8,7 +8,6 @@ import (
 
 	"github.com/MixinNetwork/supergroup/durable"
 	"github.com/MixinNetwork/supergroup/session"
-	"github.com/jackc/pgx/v4"
 )
 
 const client_white_url_DDL = `
@@ -60,19 +59,19 @@ func CheckUrlIsWhiteURL(ctx context.Context, clientID, targetURL string) bool {
 
 func GetClientWhiteURLByClientID(ctx context.Context, clientID string) ([]*ClientWhiteURL, error) {
 	var result []*ClientWhiteURL
-	err := session.Database(ctx).ConnQuery(ctx, `
-SELECT white_url FROM client_white_url WHERE client_id = $1
-	`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var item ClientWhiteURL
-			err := rows.Scan(&item.WhiteURL)
-			if err != nil {
-				return err
-			}
-			result = append(result, &item)
+	rows, err := session.Database(ctx).Query(ctx, ` SELECT white_url FROM client_white_url WHERE client_id = $1 `, clientID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var item ClientWhiteURL
+		err := rows.Scan(&item.WhiteURL)
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	}, clientID)
+		result = append(result, &item)
+	}
 	return result, err
 }
 

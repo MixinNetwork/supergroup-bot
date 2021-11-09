@@ -149,39 +149,43 @@ WHERE user_id = $1 AND guess_id = $2 AND date=current_date`,
 
 func getGuessRecordByUserID(ctx context.Context, userID string, guessID string) ([]*GuessRecord, error) {
 	grs := make([]*GuessRecord, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT guess_id, user_id, guess_type, to_char(date, 'YYYY-MM-DD') AS date, result 
 FROM guess_record 
 WHERE user_id = $1 AND guess_id = $2
 ORDER BY date DESC
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var g GuessRecord
-			if err := rows.Scan(&g.GuessId, &g.UserId, &g.GuessType, &g.Date, &g.Result); err != nil {
-				return err
-			}
-			grs = append(grs, &g)
+`, userID, guessID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var g GuessRecord
+		if err := rows.Scan(&g.GuessId, &g.UserId, &g.GuessType, &g.Date, &g.Result); err != nil {
+			return nil, err
 		}
-		return nil
-	}, userID, guessID)
+		grs = append(grs, &g)
+	}
 	return grs, err
 }
 
 func getAllGuessInTime(ctx context.Context) ([]*Guess, error) {
 	guesses := make([]*Guess, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT client_id, asset_id, guess_id, symbol, price_usd, rules, explain, start_time, end_time, start_at, end_at, created_at 
 FROM guess 
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var g Guess
-			if err := rows.Scan(&g.ClientId, &g.AssetID, &g.GuessId, &g.Symbol, &g.PriceUsd, &g.Rules, &g.Explain, &g.StartTime, &g.EndTime, &g.StartAt, &g.EndAt, &g.CreatedAt); err != nil {
-				return err
-			}
-			guesses = append(guesses, &g)
+`)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var g Guess
+		if err := rows.Scan(&g.ClientId, &g.AssetID, &g.GuessId, &g.Symbol, &g.PriceUsd, &g.Rules, &g.Explain, &g.StartTime, &g.EndTime, &g.StartAt, &g.EndAt, &g.CreatedAt); err != nil {
+			return nil, err
 		}
-		return nil
-	})
+		guesses = append(guesses, &g)
+	}
 	return guesses, err
 }
 
@@ -209,22 +213,23 @@ func UpdateGuessRecord(ctx context.Context) {
 			todayType = GuessTypeDown
 		}
 		grs := make([]*GuessRecord, 0)
-		if err := session.Database(ctx).ConnQuery(ctx, `
+		rows, err := session.Database(ctx).Query(ctx, `
 SELECT user_id, guess_type
 FROM guess_record
 WHERE guess_id=$1 AND date=current_date-1
 `, func(rows pgx.Rows) error {
-			for rows.Next() {
-				var gr GuessRecord
-				if rows.Scan(&gr.UserId, &gr.GuessType); err != nil {
-					return err
-				}
-				grs = append(grs, &gr)
-			}
 			return nil
-		}, gs.GuessId); err != nil {
+		}, gs.GuessId)
+		if err != nil {
 			session.Logger(ctx).Println(err)
 			continue
+		}
+		for rows.Next() {
+			var gr GuessRecord
+			if rows.Scan(&gr.UserId, &gr.GuessType); err != nil {
+				return
+			}
+			grs = append(grs, &gr)
 		}
 
 		for _, gr := range grs {
@@ -258,21 +263,25 @@ WHERE asset_id = $1 AND date = current_date%s
 
 func GetAllGuessRecordByGuessID(ctx context.Context, guessID string) ([]*GuessRecord, error) {
 	grs := make([]*GuessRecord, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT user_id,result,to_char(date, 'YYYY-MM-DD') AS date
 FROM guess_record
 WHERE guess_id = $1
 ORDER BY date DESC
 `, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var gr GuessRecord
-			if err := rows.Scan(&gr.UserId, &gr.Result, &gr.Date); err != nil {
-				return err
-			}
-			grs = append(grs, &gr)
-		}
 		return nil
 	}, guessID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var gr GuessRecord
+		if err := rows.Scan(&gr.UserId, &gr.Result, &gr.Date); err != nil {
+			return nil, err
+		}
+		grs = append(grs, &gr)
+	}
 	return grs, err
 }
 
