@@ -1,0 +1,26 @@
+{
+  "client": {
+    "client_id": "",
+    "client_secret": "",
+    "pin": "",
+    "session_id": "",
+    "pin_token": "",
+    "private_key": "",
+    "asset_id": "",
+    "host": "",
+    "name": "",
+    "description": ""
+  },
+  "level": {
+    "fresh": "0",
+    "senior": "0",
+    "large": "0"
+  },
+  "replay": {
+    "join_msg": "",
+    "welcome": ""
+  },
+  "manager_list": [
+    ""
+  ]
+}
