@@ -13,7 +13,6 @@ import (
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/MixinNetwork/supergroup/tools"
 	"github.com/fox-one/mixin-sdk-go"
-	"github.com/jackc/pgx/v4"
 	"github.com/shopspring/decimal"
 )
 
@@ -267,21 +266,21 @@ func HandleTransfer() {
 
 func handleTransfer(ctx context.Context) {
 	ts := make([]*Transfer, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT client_id,trace_id,asset_id,opponent_id,amount,memo 
 FROM transfer_pendding 
-WHERE status=1`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			t := Transfer{new(mixin.TransferInput), ""}
-			if err := rows.Scan(&t.ClientID, &t.TraceID, &t.AssetID, &t.OpponentID, &t.Amount, &t.Memo); err != nil {
-				return err
-			}
-			ts = append(ts, &t)
-		}
-		return nil
-	}); err != nil {
+WHERE status=1`)
+	if err != nil {
 		session.Logger(ctx).Println("select transfer_pendding error", err)
 		return
+	}
+
+	for rows.Next() {
+		t := Transfer{new(mixin.TransferInput), ""}
+		if err := rows.Scan(&t.ClientID, &t.TraceID, &t.AssetID, &t.OpponentID, &t.Amount, &t.Memo); err != nil {
+			return
+		}
+		ts = append(ts, &t)
 	}
 	for _, t := range ts {
 		client := GetMixinClientByID(_ctx, t.ClientID)

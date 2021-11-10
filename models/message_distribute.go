@@ -86,26 +86,28 @@ func RemoveOvertimeDistributeMessages(ctx context.Context) error {
 // 获取指定的消息
 func PendingActiveDistributedMessages(ctx context.Context, clientID, shardID string) ([]*mixin.MessageRequest, error) {
 	dms := make([]*mixin.MessageRequest, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT representative_id, user_id, conversation_id, message_id, category, data, quote_message_id FROM distribute_messages
 WHERE client_id=$1 AND shard_id=$2 AND status=$3
 ORDER BY level, created_at
 LIMIT 100
-`, func(rows pgx.Rows) error {
-		repeatUser := make(map[string]bool)
-		for rows.Next() {
-			var dm mixin.MessageRequest
-			if err := rows.Scan(&dm.RepresentativeID, &dm.RecipientID, &dm.ConversationID, &dm.MessageID, &dm.Category, &dm.Data, &dm.QuoteMessageID); err != nil {
-				return err
-			}
-			if repeatUser[dm.RecipientID] {
-				continue
-			}
-			repeatUser[dm.RecipientID] = true
-			dms = append(dms, &dm)
+`, clientID, shardID, DistributeMessageStatusPending)
+	if err != nil {
+		return nil, err
+	}
+
+	repeatUser := make(map[string]bool)
+	for rows.Next() {
+		var dm mixin.MessageRequest
+		if err := rows.Scan(&dm.RepresentativeID, &dm.RecipientID, &dm.ConversationID, &dm.MessageID, &dm.Category, &dm.Data, &dm.QuoteMessageID); err != nil {
+			return nil, err
 		}
-		return nil
-	}, clientID, shardID, DistributeMessageStatusPending)
+		if repeatUser[dm.RecipientID] {
+			continue
+		}
+		repeatUser[dm.RecipientID] = true
+		dms = append(dms, &dm)
+	}
 	return dms, err
 }
 
@@ -240,43 +242,44 @@ SELECT created_at FROM distribute_messages WHERE client_id=$1 AND status=1 ORDER
 
 func GetMsgStatistics(ctx context.Context) ([][]map[string]int, error) {
 	sss := make([][]map[string]int, 0)
-	_ = session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT c.name, count(1)
 FROM distribute_messages  d
 LEFT JOIN  client c ON d.client_id = c.client_id
 WHERE d.status=1
-GROUP BY (c.name)
-`, func(rows pgx.Rows) error {
-		ss := make([]map[string]int, 0)
-		for rows.Next() {
-			var name string
-			var count int
-			if err := rows.Scan(&name, &count); err != nil {
-				return err
-			}
-			ss = append(ss, map[string]int{name: count})
+GROUP BY (c.name)`)
+	if err != nil {
+		return nil, err
+	}
+	ssi := make([]map[string]int, 0)
+	for rows.Next() {
+		var name string
+		var count int
+		if err := rows.Scan(&name, &count); err != nil {
+			return nil, err
 		}
-		sss = append(sss, ss)
-		return nil
-	})
-	err := session.Database(ctx).ConnQuery(ctx, `
+		ssi = append(ssi, map[string]int{name: count})
+	}
+	sss = append(sss, ssi)
+	rows, err = session.Database(ctx).Query(ctx, `
 SELECT c.name, count(1) 
 FROM distribute_messages as d 
 LEFT JOIN client c ON d.client_id = c.client_id 
 GROUP BY (c.name)
-`, func(rows pgx.Rows) error {
-		ss := make([]map[string]int, 0)
-		for rows.Next() {
-			var name string
-			var count int
-			if err := rows.Scan(&name, &count); err != nil {
-				return err
-			}
-			ss = append(ss, map[string]int{name: count})
+`)
+	if err != nil {
+		return nil, err
+	}
+	ssj := make([]map[string]int, 0)
+	for rows.Next() {
+		var name string
+		var count int
+		if err := rows.Scan(&name, &count); err != nil {
+			return nil, err
 		}
-		sss = append(sss, ss)
-		return nil
-	})
+		ssj = append(ssj, map[string]int{name: count})
+	}
+	sss = append(sss, ssj)
 	return sss, err
 }
 

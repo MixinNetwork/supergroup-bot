@@ -16,7 +16,6 @@ import (
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/MixinNetwork/supergroup/tools"
 	"github.com/fox-one/mixin-sdk-go"
-	"github.com/jackc/pgx/v4"
 	"github.com/qiniu/go-sdk/v7/auth/qbox"
 	"github.com/qiniu/go-sdk/v7/storage"
 )
@@ -137,20 +136,22 @@ WHERE live_id=$1
 
 func GetLivesByClientID(ctx context.Context, u *ClientUser) ([]*Live, error) {
 	ls := make([]*Live, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT live_id,client_id,img_url,category,title,description,status,created_at,top_at
 FROM lives 
 WHERE client_id=$1 ORDER BY created_at DESC
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var l Live
-			if err := rows.Scan(&l.LiveID, &l.ClientID, &l.ImgURL, &l.Category, &l.Title, &l.Description, &l.Status, &l.CreatedAt, &l.TopAt); err != nil {
-				return err
-			}
-			ls = append(ls, &l)
+`, u.ClientID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var l Live
+		if err := rows.Scan(&l.LiveID, &l.ClientID, &l.ImgURL, &l.Category, &l.Title, &l.Description, &l.Status, &l.CreatedAt, &l.TopAt); err != nil {
+			return nil, err
 		}
-		return nil
-	}, u.ClientID)
+		ls = append(ls, &l)
+	}
 	return ls, err
 }
 
@@ -450,21 +451,23 @@ func getQiniuUploader() (*storage.FormUploader, string) {
 
 func GetLiveReplayByLiveID(ctx context.Context, u *ClientUser, liveID, addr string) ([]*LiveReplay, error) {
 	lrs := make([]*LiveReplay, 0)
-	err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT category,data,created_at
 FROM live_replay
 WHERE live_id=$1
 ORDER BY created_at
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var lr LiveReplay
-			if err := rows.Scan(&lr.Category, &lr.Data, &lr.CreatedAt); err != nil {
-				return err
-			}
-			lrs = append(lrs, &lr)
+`, liveID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var lr LiveReplay
+		if err := rows.Scan(&lr.Category, &lr.Data, &lr.CreatedAt); err != nil {
+			return nil, err
 		}
-		return nil
-	}, liveID)
+		lrs = append(lrs, &lr)
+	}
 
 	if _, err := session.Database(ctx).Exec(ctx, durable.InsertQuery("live_play", "live_id,user_id,addr"), liveID, u.UserID, addr); err != nil {
 		session.Logger(ctx).Println(err)

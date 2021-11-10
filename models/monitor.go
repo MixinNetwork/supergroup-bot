@@ -8,7 +8,6 @@ import (
 	"github.com/MixinNetwork/supergroup/config"
 	"github.com/MixinNetwork/supergroup/session"
 	"github.com/fox-one/mixin-sdk-go"
-	"github.com/jackc/pgx/v4"
 	"github.com/robfig/cron/v3"
 	"github.com/shopspring/decimal"
 )
@@ -73,40 +72,36 @@ func LotteryStatistic(ctx context.Context) {
 
 func getYesterdayLotteryTimes(ctx context.Context) int {
 	var times int
-	if err := session.Database(ctx).ConnQueryRow(ctx, `
+	row := session.Database(ctx).QueryRow(ctx, `
 SELECT COUNT(1) 
 FROM lottery_record 
-WHERE created_at between CURRENT_DATE-1 and CURRENT_DATE`,
-		func(rows pgx.Row) error {
-			return rows.Scan(&times)
-		},
-	); err != nil {
-		session.Logger(ctx).Println(err)
+WHERE created_at between CURRENT_DATE-1 and CURRENT_DATE`)
+	err := row.Scan(&times)
+	if err != nil {
+		return 0
 	}
 	return times
 }
 
 func getYesterdaySendReward(ctx context.Context) map[string]decimal.Decimal {
 	finishedAssetMap := make(map[string]decimal.Decimal)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT asset_id, COALESCE(SUM(amount::decimal),0)
 FROM lottery_record 
 WHERE is_received = true AND
 created_at between CURRENT_DATE-1 and CURRENT_DATE
-GROUP BY asset_id`,
-		func(rows pgx.Rows) error {
-			for rows.Next() {
-				var assetID string
-				var amount decimal.Decimal
-				if err := rows.Scan(&assetID, &amount); err != nil {
-					return err
-				}
-				finishedAssetMap[assetID] = amount
-			}
-			return nil
-		},
-	); err != nil {
+GROUP BY asset_id`)
+	if err != nil {
 		session.Logger(ctx).Println(err)
+	}
+
+	for rows.Next() {
+		var assetID string
+		var amount decimal.Decimal
+		if err := rows.Scan(&assetID, &amount); err != nil {
+			return nil
+		}
+		finishedAssetMap[assetID] = amount
 	}
 	return finishedAssetMap
 }

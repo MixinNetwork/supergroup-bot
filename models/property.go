@@ -38,7 +38,8 @@ func ReadProperty(ctx context.Context, key string) (string, error) {
 
 func WriteProperty(ctx context.Context, key, value string) error {
 	query := "INSERT INTO properties (key,value,updated_at) VALUES($1,$2,$3) ON CONFLICT (key) DO UPDATE SET (value,updated_at)=(EXCLUDED.value, EXCLUDED.updated_at)"
-	return session.Database(ctx).ConnExec(ctx, query, key, value, time.Now())
+	_, err := session.Database(ctx).Exec(ctx, query, key, value, time.Now())
+	return err
 }
 
 func CleanModelCache() {

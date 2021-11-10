@@ -73,7 +73,7 @@ func GetInvitationListByUserID(ctx context.Context, u *ClientUser, page int) ([]
 		page = 1
 	}
 	// offset := (page - 1) * 20
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT a.invitee_id,a.amount,u.full_name,u.identity_number,u.avatar_url,to_char(i.created_at, 'YYYY/MM/DD') FROM 
 	(SELECT invitee_id, COALESCE(SUM(amount::int),0) as amount FROM invitation_power_record
   WHERE inviter_id = $1
@@ -81,17 +81,17 @@ SELECT a.invitee_id,a.amount,u.full_name,u.identity_number,u.avatar_url,to_char(
 LEFT JOIN users u ON u.user_id=a.invitee_id
 LEFT JOIN invitation i ON i.invitee_id=a.invitee_id
 ORDER BY i.created_at DESC
-`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var i InvitationListResp
-			if err := rows.Scan(&i.UserID, &i.Amount, &i.FullName, &i.IdentityNumber, &i.AvatarURL, &i.CreatedAt); err != nil {
-				return err
-			}
-			list = append(list, &i)
-		}
-		return nil
-	}, u.UserID); err != nil {
+`, u.UserID)
+	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var i InvitationListResp
+		if err := rows.Scan(&i.UserID, &i.Amount, &i.FullName, &i.IdentityNumber, &i.AvatarURL, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, &i)
 	}
 
 	return list, nil
@@ -229,21 +229,23 @@ func DailyHandleInvitationOnceReward(ctx context.Context) {
 func handleInvitationOnceReward(ctx context.Context) error {
 	// 1. 获取30天的未分发一次性奖励的用户
 	is := make([]Invitation, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT inviter_id,invitee_id,created_at FROM invitation 
 WHERE to_char(created_at, 'YYYY-MM-DD')= to_char(current_date-30, 'YYYY-MM-DD')
 	`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var i Invitation
-			if err := rows.Scan(&i.InviterID, &i.InviteeID, &i.CreatedAt); err != nil {
-				return err
-			}
-			is = append(is, i)
-		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		session.Logger(ctx).Println(err)
 		return err
+	}
+
+	for rows.Next() {
+		var i Invitation
+		if err := rows.Scan(&i.InviterID, &i.InviteeID, &i.CreatedAt); err != nil {
+			return err
+		}
+		is = append(is, i)
 	}
 	if len(is) == 0 {
 		return nil
@@ -310,19 +312,21 @@ WHERE user_id=$1 AND power_type='claim' AND amount='5'
 
 func checkInviterMaxReward(ctx context.Context, inviterID string) (int, error) {
 	invitees := make([]string, 0)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT invitee_id FROM invitation WHERE inviter_id=$1
 	`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var inviteeID string
-			if err := rows.Scan(&inviteeID); err != nil {
-				return err
-			}
-			invitees = append(invitees, inviteeID)
-		}
 		return nil
-	}, inviterID); err != nil {
-		return 20, err
+	}, inviterID)
+	if err != nil {
+		return 0, err
+	}
+
+	for rows.Next() {
+		var inviteeID string
+		if err := rows.Scan(&inviteeID); err != nil {
+			return 0, err
+		}
+		invitees = append(invitees, inviteeID)
 	}
 	vipCount := decimal.Zero
 	normalCount := decimal.Zero

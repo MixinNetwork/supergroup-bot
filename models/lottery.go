@@ -157,27 +157,26 @@ func GetLotteryRecordList(ctx context.Context, u *ClientUser, page int) ([]Lotte
 		page = 1
 	}
 	var list []LotteryRecord
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT asset_id, amount, to_char(created_at, 'YYYY-MM-DD') AS date 
 FROM lottery_record 
 WHERE user_id = $1 
 ORDER BY created_at DESC 
 OFFSET $2 LIMIT 20
-`,
-		func(rows pgx.Rows) error {
-			for rows.Next() {
-				var r LotteryRecord
-				if err := rows.Scan(&r.AssetID, &r.Amount, &r.Date); err != nil {
-					return err
-				}
-				a, _ := GetAssetByID(ctx, nil, r.AssetID)
-				r.Symbol = a.Symbol
-				r.IconURL = a.IconUrl
-				list = append(list, r)
-			}
-			return nil
-		}, u.UserID, (page-1)*20); err != nil {
+`, u.UserID, (page-1)*20)
+	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var r LotteryRecord
+		if err := rows.Scan(&r.AssetID, &r.Amount, &r.Date); err != nil {
+			return nil, err
+		}
+		a, _ := GetAssetByID(ctx, nil, r.AssetID)
+		r.Symbol = a.Symbol
+		r.IconURL = a.IconUrl
+		list = append(list, r)
 	}
 	return list, nil
 }
@@ -258,25 +257,26 @@ func getLotteryByID(ctx context.Context, id string) *config.Lottery {
 
 func getLastLottery(ctx context.Context) []LotteryRecord {
 	list := make([]LotteryRecord, 0)
-	session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT lr.asset_id, lr.amount, u.full_name
 FROM lottery_record lr 
 LEFT JOIN users u ON u.user_id = lr.user_id
-ORDER BY lr.created_at DESC LIMIT 5`,
-		func(rows pgx.Rows) error {
-			for rows.Next() {
-				var r LotteryRecord
-				if err := rows.Scan(&r.AssetID, &r.Amount, &r.FullName); err != nil {
-					return err
-				}
-				a, _ := GetAssetByID(ctx, nil, r.AssetID)
-				r.Symbol = a.Symbol
-				r.IconURL = a.IconUrl
-				r.PriceUsd = a.PriceUsd.Mul(r.Amount).Round(2)
-				list = append(list, r)
-			}
+ORDER BY lr.created_at DESC LIMIT 5`)
+	if err != nil {
+		return nil
+	}
+
+	for rows.Next() {
+		var r LotteryRecord
+		if err := rows.Scan(&r.AssetID, &r.Amount, &r.FullName); err != nil {
 			return nil
-		})
+		}
+		a, _ := GetAssetByID(ctx, nil, r.AssetID)
+		r.Symbol = a.Symbol
+		r.IconURL = a.IconUrl
+		r.PriceUsd = a.PriceUsd.Mul(r.Amount).Round(2)
+		list = append(list, r)
+	}
 	return list
 }
 

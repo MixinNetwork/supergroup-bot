@@ -6,7 +6,6 @@ import (
 
 	"github.com/MixinNetwork/supergroup/durable"
 	"github.com/MixinNetwork/supergroup/session"
-	"github.com/jackc/pgx/v4"
 )
 
 const swap_DDL = `
@@ -67,7 +66,8 @@ const (
 
 func UpdateSwap(ctx context.Context, s *Swap) error {
 	query := durable.InsertQueryOrUpdate("swap", "lp_asset", "asset0,asset0_price,asset0_amount,asset1,asset1_price,asset1_amount,type,pool,earn,amount,updated_at")
-	return session.Database(ctx).ConnExec(ctx, query, s.LpAsset, s.Asset0, s.Asset0Price, s.Asset0Amount, s.Asset1, s.Asset1Price, s.Asset1Amount, s.Type, s.Pool, s.Earn, s.Amount, s.UpdatedAt)
+	_, err := session.Database(ctx).Exec(ctx, query, s.LpAsset, s.Asset0, s.Asset0Price, s.Asset0Amount, s.Asset1, s.Asset1Price, s.Asset1Amount, s.Type, s.Pool, s.Earn, s.Amount, s.UpdatedAt)
+	return err
 }
 
 type SwapResp struct {
@@ -80,7 +80,7 @@ func GetSwapList(ctx context.Context, id string) (*SwapResp, error) {
 	var ss []*Swap
 	// CNB 特殊处理...
 	if id == "965e5c6e-434c-3fa9-b780-c50f43cd955c" {
-		if err := session.Database(ctx).ConnQuery(ctx, `
+		rows, err := session.Database(ctx).Query(ctx, `
 SELECT s.lp_asset,
 s.asset0,s.asset0_price,s.asset0_amount,
 s.asset1,s.asset1_price,s.asset1_amount,
@@ -92,25 +92,25 @@ LEFT JOIN assets as a0 ON a0.asset_id=s.asset0
 LEFT JOIN assets as a1 ON a1.asset_id=s.asset1
 WHERE (s.asset0=$1 OR s.asset1=$1)
 AND lp.icon_url IS NOT null
-ORDER BY s.pool::real DESC`, func(rows pgx.Rows) error {
-			for rows.Next() {
-				var s Swap
-				err := rows.Scan(&s.LpAsset,
-					&s.Asset0, &s.Asset0Price, &s.Asset0Amount,
-					&s.Asset1, &s.Asset1Price, &s.Asset1Amount,
-					&s.Type, &s.Pool, &s.Earn, &s.Amount, &s.UpdatedAt, &s.IconURL, &s.Asset0Symbol, &s.Asset1Symbol)
-				if err != nil {
-					session.Logger(ctx).Println(err)
-					return err
-				}
-				ss = append(ss, &s)
-			}
-			return nil
-		}, id); err != nil {
+ORDER BY s.pool::real DESC`, id)
+		if err != nil {
 			return nil, err
 		}
+
+		for rows.Next() {
+			var s Swap
+			err := rows.Scan(&s.LpAsset,
+				&s.Asset0, &s.Asset0Price, &s.Asset0Amount,
+				&s.Asset1, &s.Asset1Price, &s.Asset1Amount,
+				&s.Type, &s.Pool, &s.Earn, &s.Amount, &s.UpdatedAt, &s.IconURL, &s.Asset0Symbol, &s.Asset1Symbol)
+			if err != nil {
+				session.Logger(ctx).Println(err)
+				return nil, err
+			}
+			ss = append(ss, &s)
+		}
 	} else {
-		if err := session.Database(ctx).ConnQuery(ctx,
+		rows, err := session.Database(ctx).Query(ctx,
 			`SELECT s.lp_asset,
 s.asset0,s.asset0_price,s.asset0_amount,
 s.asset1,s.asset1_price,s.asset1_amount,
@@ -121,22 +121,21 @@ LEFT JOIN assets as lp ON lp.asset_id=s.lp_asset
 LEFT JOIN assets as a0 ON a0.asset_id=s.asset0
 LEFT JOIN assets as a1 ON a1.asset_id=s.asset1
 WHERE s.pool::real > 10000 AND (s.asset0=$1 OR s.asset1=$1) AND lp.icon_url is not null
-ORDER BY s.pool::real DESC`,
-			func(rows pgx.Rows) error {
-				for rows.Next() {
-					var s Swap
-					err := rows.Scan(&s.LpAsset,
-						&s.Asset0, &s.Asset0Price, &s.Asset0Amount,
-						&s.Asset1, &s.Asset1Price, &s.Asset1Amount,
-						&s.Type, &s.Pool, &s.Earn, &s.Amount, &s.UpdatedAt, &s.IconURL, &s.Asset0Symbol, &s.Asset1Symbol)
-					if err != nil {
-						return err
-					}
-					ss = append(ss, &s)
-				}
-				return nil
-			}, id); err != nil {
+ORDER BY s.pool::real DESC`)
+		if err != nil {
 			return nil, err
+		}
+
+		for rows.Next() {
+			var s Swap
+			err := rows.Scan(&s.LpAsset,
+				&s.Asset0, &s.Asset0Price, &s.Asset0Amount,
+				&s.Asset1, &s.Asset1Price, &s.Asset1Amount,
+				&s.Type, &s.Pool, &s.Earn, &s.Amount, &s.UpdatedAt, &s.IconURL, &s.Asset0Symbol, &s.Asset1Symbol)
+			if err != nil {
+				return nil, err
+			}
+			ss = append(ss, &s)
 		}
 	}
 

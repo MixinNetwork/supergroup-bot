@@ -208,20 +208,22 @@ func getOriginMsgIDMapAndUpdateMsg(ctx context.Context, clientID string, msg *mi
 
 func getQuoteMsgIDUserIDMaps(ctx context.Context, clientID, originMsgID string) (map[string]string, error) {
 	recallMsgIDMap := make(map[string]string)
-	if err := session.Database(ctx).ConnQuery(ctx, `
+	rows, err := session.Database(ctx).Query(ctx, `
 SELECT message_id, user_id
 FROM distribute_messages
 WHERE client_id=$1 AND origin_message_id=$2`, func(rows pgx.Rows) error {
-		for rows.Next() {
-			var msgID, userID string
-			if err := rows.Scan(&msgID, &userID); err != nil {
-				return err
-			}
-			recallMsgIDMap[userID] = msgID
-		}
 		return nil
-	}, clientID, originMsgID); err != nil {
+	}, clientID, originMsgID)
+	if err != nil {
 		return nil, err
+	}
+
+	for rows.Next() {
+		var msgID, userID string
+		if err := rows.Scan(&msgID, &userID); err != nil {
+			return nil, err
+		}
+		recallMsgIDMap[userID] = msgID
 	}
 	if len(recallMsgIDMap) == 0 {
 		// 消息已经被删除...

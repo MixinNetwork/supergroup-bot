@@ -50,6 +50,10 @@ func (d *Database) Query(ctx context.Context, sql string, args ...interface{}) (
 	return d.pool.Query(ctx, sql, args)
 }
 
+func (d *Database) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
+	return d.pool.CopyFrom(ctx, tableName, columnNames, rowSrc)
+}
+
 func (d *Database) RunInTransaction(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
 	tx, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
