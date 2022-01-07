@@ -11,11 +11,14 @@ const routes = [
   { path: "/reward", component: "@/pages/home/reward" },
   { path: "/lottery", component: "@/pages/home/lottery/index" },
   { path: "/lottery/records", component: "@/pages/home/lottery/records" },
+
+  // 活动相关
   { path: "/activity", component: "@/pages/home/activity" },
   { path: "/activity/:id", component: "@/pages/home/activity/guess" },
   { path: "/activity/:id/records", component: "@/pages/home/activity/records" },
   { path: "/mint", component: "@/pages/home/activity/mint/index" },
   { path: "/mint/record", component: "@/pages/home/activity/mint/record" },
+  { path: "/card", component: "@/pages/home/activity/card/index" },
 
   { path: "/setting", component: "@/pages/home/setting" },
   { path: "/exit", component: "@/pages/home/exit" },
