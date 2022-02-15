@@ -85,7 +85,7 @@ func RemoveDistributeMessagesByMessageIDs(ctx context.Context, messageIDs []stri
 func PendingActiveDistributedMessages(ctx context.Context, clientID, shardID string) ([]*mixin.MessageRequest, error) {
 	dms := make([]*mixin.MessageRequest, 0)
 	err := session.Database(ctx).ConnQuery(ctx, `
-SELECT representative_id, user_id, conversation_id, message_id, category, data, quote_message_id FROM distribute_messages
+SELECT representative_id, user_id, conversation_id, message_id, category, data, quote_message_id, origin_message_id FROM distribute_messages
 WHERE client_id=$1 AND shard_id=$2 AND status=$3
 ORDER BY level, created_at
 LIMIT 100
@@ -93,18 +93,53 @@ LIMIT 100
 		repeatUser := make(map[string]bool)
 		for rows.Next() {
 			var dm mixin.MessageRequest
-			if err := rows.Scan(&dm.RepresentativeID, &dm.RecipientID, &dm.ConversationID, &dm.MessageID, &dm.Category, &dm.Data, &dm.QuoteMessageID); err != nil {
+			var originMsgID string
+			if err := rows.Scan(&dm.RepresentativeID, &dm.RecipientID, &dm.ConversationID, &dm.MessageID, &dm.Category, &dm.Data, &dm.QuoteMessageID, &originMsgID); err != nil {
 				return err
 			}
 			if repeatUser[dm.RecipientID] {
 				continue
 			}
 			repeatUser[dm.RecipientID] = true
+			if dm.Data == "" {
+				data, err := getMessageDataByMsgID(ctx, originMsgID)
+				if err != nil {
+					session.Logger(ctx).Println(err)
+					continue
+				}
+				dm.Data = data
+			}
+			if dm.Category == mixin.MessageCategoryMessageRecall {
+				dm.RepresentativeID = ""
+			}
 			dms = append(dms, &dm)
 		}
 		return nil
 	}, clientID, shardID, DistributeMessageStatusPending)
 	return dms, err
+}
+
+var cacheMessageData *tools.Mutex
+
+func getMessageDataByMsgID(ctx context.Context, messageID string) (string, error) {
+	data := cacheMessageData.Read(messageID)
+	if d, ok := data.(string); ok && d != "" {
+		return d, nil
+	}
+	var d string
+	if err := session.Database(ctx).QueryRow(ctx, "SELECT data FROM messages WHERE message_id=$1", messageID).Scan(&d); err != nil {
+		return "", err
+	}
+	cacheMessageData.Write(messageID, d)
+	go func(msgID string) {
+		time.Sleep(time.Hour)
+		cacheMessageData.Delete(msgID)
+	}(messageID)
+	return d, nil
+}
+
+func init() {
+	cacheMessageData = tools.NewMutex()
 }
 
 func SendBatchMessages(ctx context.Context, client *mixin.Client, msgList []*mixin.MessageRequest) error {

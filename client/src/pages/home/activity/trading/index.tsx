@@ -1,7 +1,7 @@
 import { BackHeader } from '@/components/BackHeader'
 import { Button } from '@/components/Sub'
 import React, { useEffect, useState } from 'react'
-import { history, useParams } from 'umi'
+import { history, useIntl, useParams } from 'umi'
 import styles from './index.less'
 import { Modal } from 'antd-mobile'
 import { JoinModal } from '@/components/PopupModal/join'
@@ -11,12 +11,14 @@ import moment from 'moment'
 import { get4SwapUrl, getAuthUrl, getMixSwapUrl, USDT_ASSET_ID } from '@/apis/http'
 import { changeTheme } from '@/assets/ts/tools'
 import { Icon } from '@/components/Icon'
+import { get$t } from '@/locales/tools'
 
 export default function Page() {
   const { id } = useParams<{ id: string }>()
   const [showModal, setShowModal] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
   const [pageData, setPageData] = useState<ITradingCompetitionResp>()
+  const $t = get$t(useIntl())
 
   useEffect(() => {
     initPage().then(() => {
@@ -48,27 +50,27 @@ export default function Page() {
 
       <div className={styles.content}>
         <div className={styles.item}>
-          <div className={styles.item_title}>交易规则</div>
+          <div className={styles.item_title}>{$t('trading.rule')}</div>
           <p className={styles.item_desc}>{pageData?.trading_competition.rules}</p>
         </div>
         <div className={styles.item}>
-          <div className={styles.item_title}>活动时间</div>
+          <div className={styles.item_title}>{$t('trading.time')}</div>
           <p className={styles.item_desc}>{moment(pageData?.trading_competition.start_at).format('YYYY/MM/DD')} ~ {moment(pageData?.trading_competition.end_at).format('YYYY/MM/DD')}</p>
         </div>
         <div className={styles.item}>
-          <div className={styles.item_title}>交易奖励</div>
+          <div className={styles.item_title}>{$t('trading.reward')}</div>
           <p className={styles.item_desc} dangerouslySetInnerHTML={{ __html: pageData?.trading_competition.reward || "" }}></p>
         </div>
       </div>
 
       {!pageData || pageData.status === "1" ?
-        <Button className={styles.btn} onClick={() => location.href = getAuthUrl({ returnTo: "", hasSnapshots: true, hasAssets: true })}>授权参与</Button> :
+        <Button className={styles.btn} onClick={() => location.href = getAuthUrl({ returnTo: "", hasSnapshots: true, hasAssets: true })}>{$t('trading.auth')}</Button> :
         <>
           <Button onClick={() => {
             setShowModal(true)
             document.getElementsByTagName('body')[0].style.backgroundColor = '#fff'
-          }} className={styles.btn}>交易 {pageData.asset.symbol}</Button>
-          <span className={styles.check} onClick={() => history.push(`/trading/rank/${id}`)}>查看排名</span>
+          }} className={styles.btn}>{$t('home.trade')} {pageData.asset.symbol}</Button>
+          <span className={styles.check} onClick={() => history.push(`/trading/rank/${id}`)}>{$t('trading.viewRank')}</span>
         </>}
       <Modal
         visible={showModal}
@@ -82,13 +84,13 @@ export default function Page() {
         }}
       >
         <JoinModal modalProp={{
-          title: "交易 " + pageData?.asset.symbol,
-          desc: `你可以通过 MixSwap 或者 4swap 用 USDT、BTC、ETH 等多种币兑换 ${pageData?.asset.symbol} 来参与交易大赛。`,
+          title: $t('home.trade') + pageData?.asset.symbol,
+          desc: $t('trading.modalDesc', { symobl: pageData?.asset.symbol }),
           descStyle: "blank",
           icon_url: pageData?.asset.icon_url,
-          button: "通过 MixSwap 交易",
+          button: $t('trading.mixSwap'),
           buttonAction: () => location.href = getMixSwapUrl(USDT_ASSET_ID, pageData?.asset.asset_id || ""),
-          tips: "通过 4swap 交易",
+          tips: $t('trading.swap'),
           tipsStyle: "blank",
           tipsAction: () => location.href = get4SwapUrl(USDT_ASSET_ID, pageData?.asset.asset_id || ""),
           isAirdrop: true,

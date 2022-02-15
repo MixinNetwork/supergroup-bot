@@ -2,10 +2,11 @@ import { ApiGetTradingRankByID, ITradingRank } from '@/apis/trading'
 import { changeTheme } from '@/assets/ts/tools'
 import { BackHeader } from '@/components/BackHeader'
 import { FullLoading } from '@/components/Loading'
+import { get$t } from '@/locales/tools'
 import { $get } from '@/stores/localStorage'
 import BigNumber from 'bignumber.js'
 import React, { useEffect, useState } from 'react'
-import { useParams } from 'umi'
+import { useIntl, useParams } from 'umi'
 import styles from './rank.less'
 
 export default function Page() {
@@ -15,6 +16,7 @@ export default function Page() {
   const [amount, setAmount] = useState("0")
   const [loaded, setLoaded] = useState(false)
   const [userID, setUserID] = useState("")
+  const $t = get$t(useIntl())
   useEffect(() => {
     initPage().then(() => {
       changeTheme('#D75150')
@@ -38,7 +40,7 @@ export default function Page() {
   const idx = list.findIndex(item => item?.user_id === userID)
   return (
     <div className={`safe-view ${styles.container}`}>
-      <BackHeader name="交易排名" isWhite />
+      <BackHeader name={$t('trading.rank')} isWhite />
 
       <div className={styles.head}>
         <div className={styles.headItem2}>
@@ -72,7 +74,7 @@ export default function Page() {
           <img className={styles.itemAvatar} src={getValueByItem('avatar', symbol, v)} alt="" />
           <p className={styles.itemAmount}>{getValueByItem('amount', symbol, v)}</p>
           <p className={styles.itemID}>{getValueByItem('identity_number', symbol, v)}</p>
-          <p className={styles.itemRank}>第 {i + 4} 名</p>
+          <p className={styles.itemRank}>{$t('trading.ranked1', { i: i + 4 })}</p>
         </div>)}
         {/* <div className={styles.item}>
           <img className={styles.itemAvatar} src={test} alt="" />
@@ -81,8 +83,8 @@ export default function Page() {
           <p className={styles.itemRank}>第 5 名</p>
         </div> */}
       </div>
-      <p className={styles.tips}>您的交易量为 {amount} {symbol}，{
-        idx === -1 ? '排名未进入前 10.' : '排名第 ' + (idx + 1)
+      <p className={styles.tips}>{$t('trading.amount', { amount, symbol })}，{
+        idx === -1 ? $t('trading.noRank') : $t('trading.ranked2', { i: idx + 1 })
       }</p>
       {!loaded && <FullLoading mask />}
     </div>

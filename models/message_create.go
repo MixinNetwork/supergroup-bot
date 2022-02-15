@@ -129,6 +129,8 @@ func CreateDistributeMsgAndMarkStatus(ctx context.Context, clientID string, msg 
 		}
 	}
 
+	_data := ""
+
 	for _, s := range userList {
 		if s == msg.UserID || s == msg.RepresentativeID || checkIsBlockUser(ctx, clientID, s) {
 			continue
@@ -144,7 +146,7 @@ func CreateDistributeMsgAndMarkStatus(ctx context.Context, clientID string, msg 
 				return err
 			}
 			msg.QuoteMessageID = ""
-			msg.Data = tools.Base64Encode(data)
+			_data = tools.Base64Encode(data)
 		}
 
 		// 处理 PIN 消息
@@ -153,7 +155,7 @@ func CreateDistributeMsgAndMarkStatus(ctx context.Context, clientID string, msg 
 				continue
 			}
 			data, _ := json.Marshal(map[string]interface{}{"message_ids": pinMsgIDs[s], "action": action})
-			msg.Data = tools.Base64Encode(data)
+			_data = tools.Base64Encode(data)
 		}
 		if msg.QuoteMessageID != "" && quoteMessageIDMap[s] == "" {
 			quoteMessageIDMap[s] = msg.QuoteMessageID
@@ -177,9 +179,9 @@ func CreateDistributeMsgAndMarkStatus(ctx context.Context, clientID string, msg 
 				session.Logger(ctx).Println(err)
 				return err
 			}
-			msg.Data = tools.Base64Encode(byteData)
+			_data = tools.Base64Encode(byteData)
 		}
-		row := _createDistributeMessage(ctx, clientID, s, msg.MessageID, msgID, quoteMessageIDMap[s], msg.Category, msg.Data, sendUserID, level, DistributeMessageStatusPending, time.Now())
+		row := _createDistributeMessage(ctx, clientID, s, msg.MessageID, msgID, quoteMessageIDMap[s], msg.Category, _data, sendUserID, level, DistributeMessageStatusPending, time.Now())
 		dataToInsert = append(dataToInsert, row)
 	}
 	now := time.Now().UnixNano()
